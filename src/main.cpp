@@ -1,5 +1,6 @@
 #include <esp_camera.h>
 #include <WiFi.h>
+#include <BLEDevice.h>
 #include <Crypto.h>
 #include <SHA256.h>
 #include <NTPClient.h>
@@ -61,7 +62,8 @@ boolean verifySign(String tsStr, String sign)
   DEBUG("Origin Timestamp: " + String(ts));
   DEBUG("Now Timestamp: " + String(nowTs));
 
-  if (nowTs - ts > 180){
+  if (nowTs - ts > 180)
+  {
     DEBUG("Expired");
     return false;
   }
@@ -93,8 +95,8 @@ boolean verifySign(String tsStr, String sign)
   }
 }
 
-// 连接 WiFi
-void connectWiFi()
+// 初始化 WiFi
+void initWiFi()
 {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -107,6 +109,19 @@ void connectWiFi()
   DEBUG("Connected to WiFi");
   DEBUG("IP Address: ");
   DEBUG(WiFi.localIP());
+}
+
+// 初始化 蓝牙
+void initBLE()
+{
+  DEBUG("Initializing BLE...");
+  String IPStr = WiFi.localIP().toString();
+  IPStr.replace('.', '-');
+  std::string IPStdStr = std::string(IPStr.c_str());
+  BLEDevice::init("E32 " + IPStdStr);
+  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+  BLEDevice::startAdvertising();
+  DEBUG("BLE initialized");
 }
 
 // 初始化摄像头
@@ -221,7 +236,8 @@ void setup()
   Serial.begin(115200);
   DEBUG("starting...");
 
-  connectWiFi();
+  initWiFi();
+  initBLE();
   initCamera();
   initWebServer();
 }

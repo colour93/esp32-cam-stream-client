@@ -2,6 +2,8 @@
 #include <WiFi.h>
 #include <Crypto.h>
 #include <SHA256.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 
 #include "config.h"
@@ -33,6 +35,9 @@ unsigned long xclk = 8;
 
 AsyncWebServer server(httpPort); // HTTP服务器对象
 
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
+
 template <typename Generic>
 void DEBUG(Generic text)
 {
@@ -40,10 +45,28 @@ void DEBUG(Generic text)
   Serial.println(text);
 }
 
-boolean verifySign(String ts, String sign)
+unsigned long getTimestamp()
+{
+  timeClient.update();
+  unsigned long timestamp = timeClient.getEpochTime();
+  return timestamp;
+}
+
+boolean verifySign(String tsStr, String sign)
 {
 
-  String data = ts + SECRET;
+  unsigned long ts = strtoul(tsStr.substring(0, 10).c_str(), NULL, 10);
+  unsigned long nowTs = getTimestamp();
+
+  DEBUG("Origin Timestamp: " + String(ts));
+  DEBUG("Now Timestamp: " + String(nowTs));
+
+  if (nowTs - ts > 180){
+    DEBUG("Expired");
+    return false;
+  }
+
+  String data = tsStr + SECRET;
 
   SHA256 sha256;
   sha256.update((const uint8_t *)data.c_str(), data.length());
@@ -139,11 +162,19 @@ void initCamera()
   }
 }
 
+// 初始化 ntp 客户端
+void initNTPClient()
+{
+  DEBUG("Initializing ntp client...");
+  timeClient.begin();
+  DEBUG("NTP client initialized");
+}
+
 // 初始化 web 服务端
 void initWebServer()
 {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/plain", "Hello, ESP32!"); });
+            { request->send(200, "application/json", "{ \"app\": \"esp32-cam-stream-client\", \"timestamp\": " + String(getTimestamp()) + " }"); });
 
   server.on("/camera", HTTP_GET, [](AsyncWebServerRequest *request)
             {
